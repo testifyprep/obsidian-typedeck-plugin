@@ -1,6 +1,6 @@
 {
   "name": "obsidian-typedeck-plugin",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Obsidian plugin for Typedeck — slide delimiter visualization, slide count, format validation, and Open in Typedeck",
   "main": "main.js",
   "scripts": {

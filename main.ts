@@ -2,6 +2,7 @@ import {
     App,
     Editor,
     MarkdownView,
+    Menu,
     Modal,
     Notice,
     Plugin,
@@ -33,18 +34,69 @@ const DEFAULT_SETTINGS: TypedeckSettings = {
 
 /**
  * Splits a Markdown document into slide strings on `---` delimiters.
- * Matches Typedeck's actual parser: a line of exactly three-or-more hyphens
+ * Matches Typedeck's actual parser: a line of three-or-more hyphens
  * surrounded by blank lines (or file boundaries).
  */
 function parseSlides(content: string): string[] {
     const normalized = content.replace(/\r\n/g, '\n');
-    // Split on: newline + optional whitespace + three-or-more hyphens + optional whitespace + newline
     return normalized.split(/\n[ \t]*---+[ \t]*\n/);
 }
 
 function countSlides(content: string): number {
     if (!content || !content.trim()) return 0;
     return parseSlides(content).length;
+}
+
+/**
+ * Returns true if the content starts with YAML frontmatter
+ * (a `---` block at the very top of the file).
+ */
+function hasFrontmatter(content: string): boolean {
+    return /^---[ \t]*\n[\s\S]*?\n---[ \t]*(\n|$)/.test(content);
+}
+
+/**
+ * Strips YAML frontmatter from content if present, returning the body only.
+ */
+function stripFrontmatter(content: string): string {
+    const normalized = content.replace(/\r\n/g, '\n');
+    const match = normalized.match(/^---[ \t]*\n[\s\S]*?\n---[ \t]*\n?/);
+    return match ? normalized.slice(match[0].length) : normalized;
+}
+
+/**
+ * Converts Obsidian-specific Markdown syntax to standard Markdown that
+ * Typedeck understands. Applied to the export file created by "Open in Typedeck".
+ *
+ * Conversions:
+ *   Frontmatter     stripped entirely
+ *   Callouts        > [!quote] Title   → header line removed, body kept as blockquote
+ *   Highlights      ==text==            → text
+ *   Wikilinks       [[Page|Label]]      → Label
+ *                   [[Page]]            → Page
+ *   Checkboxes      - [x] task          → - ✓ task
+ *                   - [ ] task          → - task
+ */
+function prepareForTypedeck(content: string): string {
+    let result = stripFrontmatter(content);
+
+    // Callouts: remove the > [!type] Title header line; remaining > lines stay as blockquotes
+    result = result.replace(/^>[ \t]*\[![\w-]+\][^\n]*\n?/gm, '');
+
+    // Highlights: ==text== → text
+    result = result.replace(/==([^=\n]+)==/g, '$1');
+
+    // Wikilinks with display text: [[Page|Label]] → Label
+    result = result.replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2');
+
+    // Plain wikilinks: [[Page]] → Page
+    result = result.replace(/\[\[([^\]]+)\]\]/g, '$1');
+
+    // Checkboxes: - [x] → - ✓,  - [ ] → -
+    result = result.replace(/^([ \t]*- )\[x\] /gm, '$1✓ ');
+    result = result.replace(/^([ \t]*- )\[ \] /gm, '$1');
+
+    return result;
 }
 
 // MARK: - Validation
@@ -58,13 +110,14 @@ interface ValidationWarning {
 function validateTypedeck(content: string): ValidationWarning[] {
     const warnings: ValidationWarning[] = [];
 
-    // Frontmatter check: file starting with --- creates an empty first slide
-    if (/^---[ \t]*\n/.test(content)) {
+    // Frontmatter check: Obsidian YAML frontmatter is invisible inside Obsidian
+    // but Typedeck sees the closing --- as a slide delimiter, producing an empty first slide.
+    if (hasFrontmatter(content)) {
         warnings.push({
             slideIndex: 0,
             message:
-                'File starts with frontmatter (---). Typedeck treats this as a slide delimiter, creating an empty first slide. Remove the frontmatter block.',
-            severity: 'error',
+                'Frontmatter detected — Typedeck will import this as an empty slide. Consider stripping it before import. ("Open in Typedeck" does this automatically.)',
+            severity: 'warning',
         });
     }
 
@@ -89,15 +142,18 @@ function validateTypedeck(content: string): ValidationWarning[] {
             return;
         }
 
-        // H1 heading count
-        const h1Lines = slideContent.match(/^# .+/gm) ?? [];
-        if (h1Lines.length === 0) {
+        // Heading check — H1, H2, or H3 all count as a valid slide title
+        const headingLines = slideContent.match(/^#{1,3} .+/gm) ?? [];
+        if (headingLines.length === 0) {
             warnings.push({
                 slideIndex: index,
-                message: `Slide ${slideNum}: Missing # H1 heading — every slide should have a title`,
+                message: `Slide ${slideNum}: No heading — every slide should have a title (# H1, ## H2, or ### H3)`,
                 severity: 'warning',
             });
-        } else if (h1Lines.length > 1) {
+        }
+        // Still warn about multiple H1s
+        const h1Lines = slideContent.match(/^# .+/gm) ?? [];
+        if (h1Lines.length > 1) {
             warnings.push({
                 slideIndex: index,
                 message: `Slide ${slideNum}: ${h1Lines.length} # H1 headings — use only one per slide`,
@@ -134,7 +190,7 @@ function validateTypedeck(content: string): ValidationWarning[] {
         if (notesAnywhere.length > correctNotes.length) {
             warnings.push({
                 slideIndex: index,
-                message: `Slide ${slideNum}: Malformed speaker notes — the exact form is <!-- NOTES: ... -->  (capital NOTES, colon immediately after)`,
+                message: `Slide ${slideNum}: Malformed speaker notes — the exact form is <!-- NOTES: ... --> (capital NOTES, colon immediately after)`,
                 severity: 'error',
             });
         }
@@ -151,7 +207,7 @@ function validateTypedeck(content: string): ValidationWarning[] {
         for (const match of correctNotes) {
             const inner = match[0]
                 .replace(/^<!--\s*NOTES:\s*/, '')
-                .slice(0, -3); // strip opening and closing -->
+                .slice(0, -3);
             if (inner.includes('-->')) {
                 warnings.push({
                     slideIndex: index,
@@ -159,6 +215,44 @@ function validateTypedeck(content: string): ValidationWarning[] {
                     severity: 'error',
                 });
             }
+        }
+
+        // Obsidian-specific syntax that Typedeck cannot render
+        if (/^>[ \t]*\[![\w-]+\]/m.test(slideRaw)) {
+            warnings.push({
+                slideIndex: index,
+                message: `Slide ${slideNum}: Obsidian callout syntax ([!quote], [!note], etc.) — will appear as raw text in Typedeck. "Open in Typedeck" converts this automatically.`,
+                severity: 'warning',
+            });
+        }
+        if (/==([^=\n]+)==/.test(slideRaw)) {
+            warnings.push({
+                slideIndex: index,
+                message: `Slide ${slideNum}: Obsidian highlight syntax (==text==) — will appear as raw text in Typedeck. "Open in Typedeck" converts this automatically.`,
+                severity: 'warning',
+            });
+        }
+        if (/\[\[([^\]]+)\]\]/.test(slideRaw)) {
+            warnings.push({
+                slideIndex: index,
+                message: `Slide ${slideNum}: Obsidian wikilink ([[...]]) — will appear as raw text in Typedeck. "Open in Typedeck" converts this automatically.`,
+                severity: 'warning',
+            });
+        }
+        if (/^[ \t]*- \[[ x]\] /m.test(slideRaw)) {
+            warnings.push({
+                slideIndex: index,
+                message: `Slide ${slideNum}: Obsidian checkbox syntax (- [ ] / - [x]) — will appear as raw text in Typedeck. "Open in Typedeck" converts this automatically.`,
+                severity: 'warning',
+            });
+        }
+        // LaTeX/math: $$ display blocks are unambiguous; $...$ inline avoids plain dollar amounts
+        if (/\$\$[\s\S]*?\$\$|\$[^\d\s$][^$\n]*\$/.test(slideRaw)) {
+            warnings.push({
+                slideIndex: index,
+                message: `Slide ${slideNum}: LaTeX equation syntax detected — Typedeck does not currently support math rendering`,
+                severity: 'warning',
+            });
         }
     });
 
@@ -198,17 +292,14 @@ function buildSlideDecorations(view: EditorView): DecorationSet {
     for (let lineNum = 1; lineNum <= doc.lines; lineNum++) {
         const line = doc.line(lineNum);
 
-        // Only lines that are exactly --- (three or more hyphens, optional whitespace)
         if (!/^\s*---+\s*$/.test(line.text)) continue;
 
-        // Must be surrounded by blank lines (Typedeck's delimiter rule)
         const prevEmpty = lineNum === 1 || doc.line(lineNum - 1).text.trim() === '';
         const nextEmpty = lineNum === doc.lines || doc.line(lineNum + 1).text.trim() === '';
         if (!prevEmpty || !nextEmpty) continue;
 
         slideNumber++;
 
-        // Badge widget placed before the --- text
         builder.add(
             line.from,
             line.from,
@@ -218,7 +309,6 @@ function buildSlideDecorations(view: EditorView): DecorationSet {
             })
         );
 
-        // Line highlight
         builder.add(
             line.from,
             line.from,
@@ -248,11 +338,6 @@ const slideDecorationsPlugin = ViewPlugin.fromClass(
 
 // MARK: - Slide count ViewPlugin
 
-/**
- * Reports the current document's slide count via a callback whenever
- * the document changes. Installed as a CodeMirror extension so it fires
- * on every keystroke without needing vault/workspace polling.
- */
 function makeSlideCountPlugin(onCount: (count: number) => void) {
     return ViewPlugin.fromClass(
         class {
@@ -302,7 +387,9 @@ class ValidationModal extends Modal {
             text: parts.join(', '),
         });
 
-        const list = contentEl.createEl('ul', { cls: 'typedeck-validation-list' });
+        // Scrollable wrapper so long lists don't overflow the modal
+        const scrollWrap = contentEl.createDiv({ cls: 'typedeck-validation-scroll' });
+        const list = scrollWrap.createEl('ul', { cls: 'typedeck-validation-list' });
 
         for (const warning of this.warnings) {
             const li = list.createEl('li', {
@@ -369,20 +456,51 @@ export default class TypedeckPlugin extends Plugin {
         // CodeMirror extension 1: slide-break visualization
         this.registerEditorExtension(slideDecorationsPlugin);
 
-        // CodeMirror extension 2: live slide count — fires on every doc change
+        // CodeMirror extension 2: live slide count
         this.registerEditorExtension(
             makeSlideCountPlugin((count) => {
-                // Only update the status bar when a Markdown view is active
                 const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
                 if (!activeView) return;
                 this.setSlideCountLabel(count);
             })
         );
 
-        // Also refresh the status bar when switching leaves (e.g. switching tabs)
+        // Refresh status bar when switching tabs
         this.registerEvent(
             this.app.workspace.on('active-leaf-change', () => {
                 this.refreshStatusBarFromActiveFile();
+            })
+        );
+
+        // Ribbon icon: Export and open in Typedeck
+        this.addRibbonIcon('monitor-play', 'Export .typedeck.md and open in Typedeck', () => {
+            const file = this.app.workspace.getActiveFile();
+            if (!file || file.extension !== 'md') {
+                new Notice('Typedeck: open a Markdown file first');
+                return;
+            }
+            this.openInTypedeck(file);
+        });
+
+        // Ribbon icon: Validate Typedeck format
+        this.addRibbonIcon('check-circle', 'Validate Typedeck format', () => {
+            const file = this.app.workspace.getActiveFile();
+            if (!file || file.extension !== 'md') {
+                new Notice('Typedeck: open a Markdown file first');
+                return;
+            }
+            this.validateCurrentFile(file);
+        });
+
+        // Editor right-click context menu: Insert speaker notes
+        this.registerEvent(
+            this.app.workspace.on('editor-menu', (menu: Menu, editor: Editor) => {
+                menu.addItem((item) =>
+                    item
+                        .setTitle('Insert speaker notes')
+                        .setIcon('message-square')
+                        .onClick(() => this.insertSpeakerNotes(editor))
+                );
             })
         );
 
@@ -422,7 +540,6 @@ export default class TypedeckPlugin extends Plugin {
 
         this.addSettingTab(new TypedeckSettingTab(this.app, this));
 
-        // Initial status bar state
         this.refreshStatusBarFromActiveFile();
     }
 
@@ -463,25 +580,43 @@ export default class TypedeckPlugin extends Plugin {
 
     // MARK: Open in Typedeck
 
-    private openInTypedeck(file: TFile) {
-        // Resolve the absolute file path from the vault's base path
+    private async openInTypedeck(file: TFile) {
         const adapter = this.app.vault.adapter as unknown as { basePath?: string };
         const basePath = adapter.basePath ?? '';
-        const filePath = basePath ? `${basePath}/${file.path}` : file.path;
 
-        // Single-quote-safe shell escaping
+        const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
+        const content = activeView
+            ? activeView.editor.getValue()
+            : await this.app.vault.read(file);
+
+        // Convert Obsidian-specific syntax to plain Markdown Typedeck understands
+        const converted = prepareForTypedeck(content);
+
+        // Write a sibling export file (<basename>.typedeck.md) in the same vault
+        // directory. This keeps the file inside the vault so Obsidian indexes it
+        // and Typedeck can save back to a real path.
+        const dir = file.parent ? file.parent.path : '';
+        const baseName = file.name.replace(/\.md$/, '');
+        const exportVaultPath = dir ? `${dir}/${baseName}.typedeck.md` : `${baseName}.typedeck.md`;
+
+        const existingExport = this.app.vault.getAbstractFileByPath(exportVaultPath);
+        if (existingExport instanceof TFile) {
+            await this.app.vault.modify(existingExport, converted);
+        } else {
+            await this.app.vault.create(exportVaultPath, converted);
+        }
+
+        const absExportPath = basePath ? `${basePath}/${exportVaultPath}` : exportVaultPath;
+
         const esc = (s: string) => s.replace(/'/g, "'\\''");
-        const appName = esc(this.settings.appName);
-        const absPath = esc(filePath);
-
         // eslint-disable-next-line @typescript-eslint/no-var-requires
         const { exec } = require('child_process') as typeof import('child_process');
-        exec(`open -a '${appName}' '${absPath}'`, (err) => {
+        exec(`open -a '${esc(this.settings.appName)}' '${esc(absExportPath)}'`, (err) => {
             if (err) {
                 new Notice(`Typedeck: failed to open file — ${err.message}`);
                 console.error('[Typedeck] open error:', err);
             } else {
-                new Notice(`Opened in ${this.settings.appName}`);
+                new Notice(`Opened ${baseName}.typedeck.md in ${this.settings.appName}`);
             }
         });
     }
@@ -502,14 +637,12 @@ export default class TypedeckPlugin extends Plugin {
 
     private insertSpeakerNotes(editor: Editor) {
         const cursor = editor.getCursor();
-        // Insert template with blank line above if not already at start of line
         const line = editor.getLine(cursor.line);
         const prefix = line.trim().length > 0 ? '\n' : '';
         const template = `${prefix}\n<!-- NOTES:\n\n-->`;
 
         editor.replaceRange(template, cursor);
 
-        // Position the cursor on the blank line inside the notes block
         editor.setCursor({
             line: cursor.line + (prefix ? 3 : 2),
             ch: 0,

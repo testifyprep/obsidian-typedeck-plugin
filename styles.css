@@ -42,6 +42,13 @@
     font-size: 13px;
 }
 
+/* Scrollable container so long lists don't overflow a small modal */
+.typedeck-validation-scroll {
+    overflow-y: auto;
+    max-height: 60vh;
+    margin-top: 8px;
+}
+
 .typedeck-validation-list {
     list-style: none;
     padding: 0;
@@ -57,28 +64,32 @@
     gap: 8px;
     padding: 8px 12px;
     border-radius: 6px;
+    /* Always use normal text so it's readable against any background */
+    color: var(--text-normal);
 }
 
+/* Use a tinted background + colored left border — avoids the
+   red-text-on-red-background contrast problem with --text-error */
 .typedeck-error {
     background-color: var(--background-modifier-error);
-    color: var(--text-error);
+    border-left: 3px solid var(--text-error, #e05252);
 }
 
 .typedeck-warning {
-    background-color: color-mix(in srgb, var(--color-yellow, #f5a623) 12%, transparent);
-    color: var(--text-warning, var(--color-orange, #e06c00));
+    background-color: var(--background-secondary);
+    border-left: 3px solid var(--color-yellow, #e8a21a);
 }
 
 .typedeck-validation-icon {
     font-size: 11px;
     flex-shrink: 0;
     margin-top: 2px;
-    opacity: 0.85;
 }
 
 .typedeck-validation-message {
     font-size: 13px;
     line-height: 1.45;
+    color: var(--text-normal);
 }
 
 /* ── Status bar ────────────────────────────────────────────────────────────── */
