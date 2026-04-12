@@ -1,0 +1,89 @@
+/* ── Slide-break badge ─────────────────────────────────────────────────────── */
+
+/* Inline badge that appears before the --- delimiter line in the editor */
+.typedeck-slide-break-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-accent);
+    background-color: var(--background-secondary);
+    border: 1px solid var(--background-modifier-border);
+    border-radius: 3px;
+    padding: 1px 6px;
+    margin-right: 6px;
+    font-family: var(--font-monospace);
+    vertical-align: middle;
+    user-select: none;
+    pointer-events: none;
+    line-height: 1.6;
+}
+
+/* Subtle highlight on the --- delimiter line */
+.typedeck-slide-delimiter-line {
+    background-color: var(--background-modifier-hover);
+    border-radius: 2px;
+}
+
+/* ── Validation modal ──────────────────────────────────────────────────────── */
+
+.typedeck-validation-ok p {
+    color: var(--color-green);
+    font-weight: 500;
+    font-size: 14px;
+}
+
+.typedeck-validation-summary {
+    font-weight: 500;
+    margin-bottom: 14px;
+    color: var(--text-muted);
+    font-size: 13px;
+}
+
+.typedeck-validation-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.typedeck-validation-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 8px 12px;
+    border-radius: 6px;
+}
+
+.typedeck-error {
+    background-color: var(--background-modifier-error);
+    color: var(--text-error);
+}
+
+.typedeck-warning {
+    background-color: color-mix(in srgb, var(--color-yellow, #f5a623) 12%, transparent);
+    color: var(--text-warning, var(--color-orange, #e06c00));
+}
+
+.typedeck-validation-icon {
+    font-size: 11px;
+    flex-shrink: 0;
+    margin-top: 2px;
+    opacity: 0.85;
+}
+
+.typedeck-validation-message {
+    font-size: 13px;
+    line-height: 1.45;
+}
+
+/* ── Status bar ────────────────────────────────────────────────────────────── */
+
+.typedeck-status-bar {
+    cursor: default;
+    font-variant-numeric: tabular-nums;
+}
