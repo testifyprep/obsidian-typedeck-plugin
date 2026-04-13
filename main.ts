@@ -109,18 +109,6 @@ interface ValidationWarning {
 
 function validateTypedeck(content: string): ValidationWarning[] {
     const warnings: ValidationWarning[] = [];
-
-    // Frontmatter check: Obsidian YAML frontmatter is invisible inside Obsidian
-    // but Typedeck sees the closing --- as a slide delimiter, producing an empty first slide.
-    if (hasFrontmatter(content)) {
-        warnings.push({
-            slideIndex: 0,
-            message:
-                'Frontmatter detected — Typedeck will import this as an empty slide. Consider stripping it before import. ("Open in Typedeck" does this automatically.)',
-            severity: 'warning',
-        });
-    }
-
     const slides = parseSlides(content);
 
     slides.forEach((slideRaw, index) => {
@@ -217,35 +205,6 @@ function validateTypedeck(content: string): ValidationWarning[] {
             }
         }
 
-        // Obsidian-specific syntax that Typedeck cannot render
-        if (/^>[ \t]*\[![\w-]+\]/m.test(slideRaw)) {
-            warnings.push({
-                slideIndex: index,
-                message: `Slide ${slideNum}: Obsidian callout syntax ([!quote], [!note], etc.) — will appear as raw text in Typedeck. "Open in Typedeck" converts this automatically.`,
-                severity: 'warning',
-            });
-        }
-        if (/==([^=\n]+)==/.test(slideRaw)) {
-            warnings.push({
-                slideIndex: index,
-                message: `Slide ${slideNum}: Obsidian highlight syntax (==text==) — will appear as raw text in Typedeck. "Open in Typedeck" converts this automatically.`,
-                severity: 'warning',
-            });
-        }
-        if (/\[\[([^\]]+)\]\]/.test(slideRaw)) {
-            warnings.push({
-                slideIndex: index,
-                message: `Slide ${slideNum}: Obsidian wikilink ([[...]]) — will appear as raw text in Typedeck. "Open in Typedeck" converts this automatically.`,
-                severity: 'warning',
-            });
-        }
-        if (/^[ \t]*- \[[ x]\] /m.test(slideRaw)) {
-            warnings.push({
-                slideIndex: index,
-                message: `Slide ${slideNum}: Obsidian checkbox syntax (- [ ] / - [x]) — will appear as raw text in Typedeck. "Open in Typedeck" converts this automatically.`,
-                severity: 'warning',
-            });
-        }
         // LaTeX/math: $$ display blocks are unambiguous; $...$ inline avoids plain dollar amounts
         if (/\$\$[\s\S]*?\$\$|\$[^\d\s$][^$\n]*\$/.test(slideRaw)) {
             warnings.push({
@@ -625,10 +584,13 @@ export default class TypedeckPlugin extends Plugin {
 
     private async validateCurrentFile(file: TFile) {
         const activeView = this.app.workspace.getActiveViewOfType(MarkdownView);
-        const content = activeView
+        const rawContent = activeView
             ? activeView.editor.getValue()
             : await this.app.vault.read(file);
 
+        // Validate what Typedeck will actually receive after Obsidian-specific
+        // syntax is converted — frontmatter stripped, callouts → blockquotes, etc.
+        const content = prepareForTypedeck(rawContent);
         const warnings = validateTypedeck(content);
         new ValidationModal(this.app, warnings, file.name).open();
     }
