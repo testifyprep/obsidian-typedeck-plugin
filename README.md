@@ -1,105 +1,77 @@
 # Typedeck for Obsidian
 
-An Obsidian community plugin for writing [Typedeck](https://typedeck.app)-compatible Markdown presentations. Write your deck in Obsidian, open it in Typedeck with one command.
+Write your presentations in Obsidian. Open them in Typedeck. Come back to tweak anytime. Nothing is lost. The plugin handles the translation between Obsidian's formatting conventions and Typedeck's Markdown format automatically — in both directions — so you can stay in your writing environment without giving up any of what Typedeck offers.
 
 ## Features
 
-### Slide delimiter visualization
-
-`---` delimiters that separate Typedeck slides are highlighted in the editor. A small **Slide N** badge appears before each delimiter so you can see at a glance where each slide begins while writing.
-
-The badge only fires on delimiters that follow Typedeck's rules: three hyphens on their own line, surrounded by blank lines. A horizontal rule inside a slide (which Typedeck doesn't support anyway) won't be decorated.
-
 ### Slide count in status bar
 
-The current file's slide count is shown in Obsidian's status bar (e.g., **12 slides**). It updates live as you type — no need to count `---` delimiters by hand.
+The current file's slide count is shown in Obsidian's status bar (e.g., **12 slides**). It updates live as you type, so you always know where you stand without counting `---` delimiters by hand.
+
+### Slide break visualization
+
+Each `---` slide delimiter is highlighted in the editor with a small **Slide N** badge, making it easy to see where one slide ends and the next begins while you're writing. The badge only appears on delimiters that follow Typedeck's rules — three hyphens on their own line surrounded by blank lines — so a horizontal rule inside a slide won't be decorated.
+
+### Validate Typedeck format
+
+**Ribbon icon · Command palette: "Typedeck: Validate Typedeck format"**
+
+Checks the active file against Typedeck's format rules and shows a modal listing any errors and warnings. Useful before a presentation or whenever you want a quick sanity check.
 
 ### Open in Typedeck
 
-**Command palette → "Typedeck: Open in Typedeck"**
+**Ribbon icon · Command palette: "Typedeck: Open in Typedeck"**
 
-Opens the active Markdown file directly in Typedeck via `open -a Typedeck`. Typedeck launches (or comes to the front) and opens the file for immediate preview and presentation.
+Exports the active file as a clean `.typedeck.md` sidecar, converts Obsidian-specific syntax to standard Markdown, and opens the result directly in Typedeck. Your original `.md` file is untouched.
 
-Only available when the active file is a `.md` file.
+### Sync from Typedeck
 
-### Typedeck format validation
+**Ribbon icon · Command palette: "Typedeck: Sync from Typedeck"**
 
-**Command palette → "Typedeck: Validate Typedeck format"**
-
-Checks the active file against Typedeck's format rules and shows a modal with any issues:
-
-| Check | Severity |
-|---|---|
-| File starts with frontmatter (`---`) | Error |
-| Empty slide | Error |
-| Multiple `# H1` headings on one slide | Error |
-| Malformed `<!-- NOTES: ... -->` block | Error |
-| Speaker notes containing `-->` (early termination) | Error |
-| Missing `# H1` on a slide | Warning |
-| More than 5 bullet points on a slide | Warning |
-| Multiple speaker notes blocks on one slide | Warning |
-| Code block missing language identifier | Warning |
-
-A clean file shows a single "No issues found" message.
+Pulls changes you've made in Typedeck back into your Obsidian source file, restoring Obsidian syntax (callouts, highlights, wikilinks, checkboxes) from the converted form. Content and speaker notes round-trip completely.
 
 ### Insert speaker notes
 
-**Command palette → "Typedeck: Insert speaker notes"**  
+**Right-click context menu · Command palette: "Typedeck: Insert speaker notes"**  
 **Default shortcut: Cmd+Shift+N (Mac) / Ctrl+Shift+N (Windows/Linux)**
 
-Inserts the `<!-- NOTES: -->` template at the cursor, with the cursor positioned on the blank line inside the block ready to type:
+Inserts a `<!-- NOTES: -->` block at the cursor with the insertion point already inside, ready to type. Only visible in Typedeck's Presenter View — never shown to your audience.
 
-```
-<!-- NOTES:
+### Obsidian syntax conversion
 
--->
-```
+When you export to Typedeck, the plugin automatically converts Obsidian-specific formatting to standard Markdown that Typedeck understands:
 
-## Installation
+| Obsidian syntax | Converted to |
+|---|---|
+| YAML frontmatter | Stripped entirely |
+| Callout `> [!quote] Title` | Header line removed; body kept as a blockquote |
+| Highlight `==text==` | `text` |
+| Wikilink `[[Page\|Label]]` | `Label` |
+| Wikilink `[[Page]]` | `Page` |
+| Checkbox `- [x] task` | `- ✓ task` |
+| Checkbox `- [ ] task` | `- task` |
 
-### From the community plugin store (when published)
+On sync, these conversions are reversed so your Obsidian file stays exactly as you wrote it.
 
-Search for "Typedeck" in Obsidian → Settings → Community plugins.
+## The Round-Trip Workflow
 
-### Manual installation for development
+1. **Write in Obsidian** using any Obsidian features you want — wikilinks, callouts, highlights, frontmatter, checkboxes. The plugin's live validation and slide count work as you type.
 
-```bash
-# From the repo root
-cd obsidian-typedeck-plugin
-npm install
-npm run build
+2. **Click "Open in Typedeck"** — the plugin creates a sibling export file (`filename.typedeck.md`) in the same vault folder, converts Obsidian syntax to clean Markdown, and opens it in Typedeck. Your original file is not modified.
 
-# Symlink or copy into your vault's plugin folder
-cp -r . ~/.obsidian/plugins/typedeck
-```
+3. **Present or edit in Typedeck** — adjust content, add speaker notes, reorder slides, configure build animations. Typedeck saves back to the `.typedeck.md` file.
 
-Then enable the plugin in Obsidian → Settings → Community plugins.
+4. **Click "Sync from Typedeck"** — the plugin reads the updated `.typedeck.md`, pulls content changes back into your Obsidian source file, and restores Obsidian formatting.
 
-## Building
+**What round-trips perfectly:** slide content, speaker notes, build animations (`<!-- build: bullets -->`, `<!-- build: steps -->`), code blocks, tables, images, blockquotes.
 
-```bash
-npm install
-npm run build      # production build → main.js
-npm run dev        # watch mode for development
-```
+**What lives only in Typedeck:** theme, slide transitions, layout overrides, and anything stored in Typedeck's `.typedeck` project format rather than in the Markdown file.
 
-The build uses esbuild. All CodeMirror and Obsidian packages are marked external — they're provided by Obsidian at runtime and not bundled.
+## Typedeck Markdown Format
 
-## Requirements
+Quick reference for writing slides in the format Typedeck expects.
 
-- **Obsidian 0.15.0+**
-- **macOS** (the "Open in Typedeck" command uses `open -a`; the plugin is marked `isDesktopOnly`)
-- **Typedeck** installed in `/Applications` or accessible by its app name
-
-## Settings
-
-**App name** — The name passed to `open -a <name>` when opening files. Defaults to `Typedeck`. Change this if your Typedeck installation has a different name (e.g., during beta testing with a renamed build).
-
-## Typedeck Markdown format quick reference
-
-For full details, see `docs/LLM-MARKDOWN-IMPORT-PROMPT.md` in the Typedeck repo.
-
-```markdown
+````markdown
 # Slide title
 
 Slide body — paragraphs, bullets, a code block, a table, or an image.
@@ -110,16 +82,75 @@ Speaker notes here. Only visible in Typedeck's Presenter View.
 
 ---
 
-# Next slide
+## Second slide
 
 - Up to 5 bullets recommended
 - Typedeck auto-detects the layout from the content
 
 <!-- build: bullets -->
+
+---
+
+### Third slide
+
+```swift
+let greeting = "Hello, world"
 ```
+````
 
 **Key rules:**
-- No YAML frontmatter (the leading `---` becomes a slide delimiter)
-- One `# H1` per slide — it becomes the slide title
-- Slide delimiter: blank line · `---` · blank line
-- Speaker notes: `<!-- NOTES: ... -->` at the end of the slide, one block per slide
+
+- **Slide breaks:** `---` on its own line with a blank line above and below
+- **Slide titles:** `# H1`, `## H2`, or `### H3` — one heading per slide
+- **Speaker notes:** `<!-- NOTES: ... -->` at the end of the slide, one block per slide
+- **Build animations:** `<!-- build: bullets -->` or `<!-- build: steps -->`
+- **Code blocks:** always include a language identifier (e.g., ` ```swift `)
+- **Bullets:** 5 per slide is the recommended maximum
+- **No YAML frontmatter:** the leading `---` becomes a slide delimiter in Typedeck; the plugin strips it automatically on export
+
+## Validation Rules
+
+The validator checks the following and reports errors and warnings in a modal:
+
+| Check | Severity |
+|---|---|
+| YAML frontmatter present (Typedeck reads the closing `---` as a slide delimiter) | Warning |
+| Empty slide | Error |
+| Multiple `# H1` headings on one slide | Error |
+| Malformed `<!-- NOTES: ... -->` block | Error |
+| Speaker notes containing `-->` (terminates the comment early) | Error |
+| No heading on a slide (`#`, `##`, or `###`) | Warning |
+| More than 5 bullet points on a slide | Warning |
+| Multiple speaker notes blocks on one slide | Warning |
+| Code block missing language identifier | Warning |
+| Obsidian callout syntax (`[!quote]`, `[!note]`, etc.) | Warning |
+| Obsidian highlight syntax (`==text==`) | Warning |
+| Obsidian wikilinks (`[[...]]`) | Warning |
+| Obsidian checkbox syntax (`- [ ]` / `- [x]`) | Warning |
+| LaTeX math syntax (`$...$`, `$$...$$`) | Warning |
+
+The last five are flagged as warnings but handled automatically when you use "Open in Typedeck." A clean file shows a single "No issues found" message.
+
+## Installation
+
+### From Obsidian Community Plugins (coming soon)
+
+Search for "Typedeck" in Settings → Community Plugins → Browse.
+
+### Manual Installation
+
+Download `main.js`, `manifest.json`, and `styles.css` from the [latest release](https://github.com/testifyprep/obsidian-typedeck-plugin/releases). Copy them to your vault's `.obsidian/plugins/typedeck/` folder. Enable the plugin in Settings → Community Plugins.
+
+## Settings
+
+**App name** — The name passed to `open -a <name>` when opening files in Typedeck. Defaults to `Typedeck`. Change this if your installation uses a different name (for example, during beta testing with a renamed build).
+
+## Requirements
+
+- macOS — the "Open in Typedeck" command uses the macOS `open` command
+- Typedeck installed from the Mac App Store or accessible by its app name
+
+## Links
+
+- Typedeck: https://typedeck.app
+- GitHub: https://github.com/testifyprep/obsidian-typedeck-plugin
