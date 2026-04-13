@@ -1,3 +1,4 @@
+import { exec } from 'child_process';
 import {
     App,
     Editor,
@@ -45,14 +46,6 @@ function parseSlides(content: string): string[] {
 function countSlides(content: string): number {
     if (!content || !content.trim()) return 0;
     return parseSlides(content).length;
-}
-
-/**
- * Returns true if the content starts with YAML frontmatter
- * (a `---` block at the very top of the file).
- */
-function hasFrontmatter(content: string): boolean {
-    return /^---[ \t]*\n[\s\S]*?\n---[ \t]*(\n|$)/.test(content);
 }
 
 /**
@@ -380,7 +373,7 @@ class TypedeckSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        containerEl.createEl('h2', { text: 'Typedeck' });
+        new Setting(containerEl).setName('Typedeck').setHeading();
 
         new Setting(containerEl)
             .setName('App name')
@@ -427,28 +420,28 @@ export default class TypedeckPlugin extends Plugin {
         // Refresh status bar when switching tabs
         this.registerEvent(
             this.app.workspace.on('active-leaf-change', () => {
-                this.refreshStatusBarFromActiveFile();
+                void this.refreshStatusBarFromActiveFile();
             })
         );
 
         // Ribbon icon: Export and open in Typedeck
-        this.addRibbonIcon('monitor-play', 'Export .typedeck.md and open in Typedeck', () => {
+        this.addRibbonIcon('monitor-play', 'Export and open in Typedeck', () => {
             const file = this.app.workspace.getActiveFile();
             if (!file || file.extension !== 'md') {
-                new Notice('Typedeck: open a Markdown file first');
+                new Notice('Open a Markdown file first');
                 return;
             }
-            this.openInTypedeck(file);
+            void this.openInTypedeck(file);
         });
 
-        // Ribbon icon: Validate Typedeck format
-        this.addRibbonIcon('check-circle', 'Validate Typedeck format', () => {
+        // Ribbon icon: Validate slide format
+        this.addRibbonIcon('check-circle', 'Validate slide format', () => {
             const file = this.app.workspace.getActiveFile();
             if (!file || file.extension !== 'md') {
-                new Notice('Typedeck: open a Markdown file first');
+                new Notice('Open a Markdown file first');
                 return;
             }
-            this.validateCurrentFile(file);
+            void this.validateCurrentFile(file);
         });
 
         // Editor right-click context menu: Insert speaker notes
@@ -465,24 +458,24 @@ export default class TypedeckPlugin extends Plugin {
 
         // Command: Open current file in Typedeck
         this.addCommand({
-            id: 'open-in-typedeck',
-            name: 'Open in Typedeck',
+            id: 'export-and-open',
+            name: 'Export and open in app',
             checkCallback: (checking) => {
                 const file = this.app.workspace.getActiveFile();
                 if (!file || file.extension !== 'md') return false;
-                if (!checking) this.openInTypedeck(file);
+                if (!checking) { void this.openInTypedeck(file); }
                 return true;
             },
         });
 
-        // Command: Validate Typedeck format
+        // Command: Validate slide format
         this.addCommand({
-            id: 'validate-typedeck-format',
-            name: 'Validate Typedeck format',
+            id: 'validate-format',
+            name: 'Validate slide format',
             checkCallback: (checking) => {
                 const file = this.app.workspace.getActiveFile();
                 if (!file || file.extension !== 'md') return false;
-                if (!checking) this.validateCurrentFile(file);
+                if (!checking) { void this.validateCurrentFile(file); }
                 return true;
             },
         });
@@ -491,7 +484,6 @@ export default class TypedeckPlugin extends Plugin {
         this.addCommand({
             id: 'insert-speaker-notes',
             name: 'Insert speaker notes',
-            hotkeys: [{ modifiers: ['Mod', 'Shift'], key: 'n' }],
             editorCallback: (editor: Editor) => {
                 this.insertSpeakerNotes(editor);
             },
@@ -499,7 +491,7 @@ export default class TypedeckPlugin extends Plugin {
 
         this.addSettingTab(new TypedeckSettingTab(this.app, this));
 
-        this.refreshStatusBarFromActiveFile();
+        void this.refreshStatusBarFromActiveFile();
     }
 
     onunload() {
@@ -568,11 +560,9 @@ export default class TypedeckPlugin extends Plugin {
         const absExportPath = basePath ? `${basePath}/${exportVaultPath}` : exportVaultPath;
 
         const esc = (s: string) => s.replace(/'/g, "'\\''");
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const { exec } = require('child_process') as typeof import('child_process');
         exec(`open -a '${esc(this.settings.appName)}' '${esc(absExportPath)}'`, (err) => {
             if (err) {
-                new Notice(`Typedeck: failed to open file — ${err.message}`);
+                new Notice(`Failed to open file — ${err.message}`);
                 console.error('[Typedeck] open error:', err);
             } else {
                 new Notice(`Opened ${baseName}.typedeck.md in ${this.settings.appName}`);
