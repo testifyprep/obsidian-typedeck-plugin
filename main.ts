@@ -324,7 +324,7 @@ class ValidationModal extends Modal {
 
         if (this.warnings.length === 0) {
             const ok = contentEl.createDiv({ cls: 'typedeck-validation-ok' });
-            ok.createEl('p', { text: '✓ No issues found, and the file looks good.' });
+            ok.createEl('p', { text: 'No issues found.' });
             return;
         }
 
