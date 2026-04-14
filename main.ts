@@ -320,7 +320,7 @@ class ValidationModal extends Modal {
     onOpen() {
         const { contentEl } = this;
         contentEl.empty();
-        contentEl.createEl('h2', { text: `Typedeck: ${this.filename}` });
+        contentEl.createEl('h2', { text: `Validation: ${this.filename}` });
 
         if (this.warnings.length === 0) {
             const ok = contentEl.createDiv({ cls: 'typedeck-validation-ok' });
@@ -373,7 +373,7 @@ class TypedeckSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        new Setting(containerEl).setName('Typedeck').setHeading();
+        new Setting(containerEl).setName('General').setHeading();
 
         new Setting(containerEl)
             .setName('App name')
@@ -425,7 +425,7 @@ export default class TypedeckPlugin extends Plugin {
         );
 
         // Ribbon icon: Export and open in Typedeck
-        this.addRibbonIcon('monitor-play', 'Export and open in Typedeck', () => {
+        this.addRibbonIcon('monitor-play', 'Export and open in app', () => {
             const file = this.app.workspace.getActiveFile();
             if (!file || file.extension !== 'md') {
                 new Notice('Open a Markdown file first');
