@@ -324,7 +324,7 @@ class ValidationModal extends Modal {
 
         if (this.warnings.length === 0) {
             const ok = contentEl.createDiv({ cls: 'typedeck-validation-ok' });
-            ok.createEl('p', { text: '✓ No issues found. This file looks good for Typedeck.' });
+            ok.createEl('p', { text: '✓ No issues found, and the file looks good.' });
             return;
         }
 
@@ -373,8 +373,6 @@ class TypedeckSettingTab extends PluginSettingTab {
     display(): void {
         const { containerEl } = this;
         containerEl.empty();
-        new Setting(containerEl).setName('General').setHeading();
-
         new Setting(containerEl)
             .setName('App name')
             .setDesc(
